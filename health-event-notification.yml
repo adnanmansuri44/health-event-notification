@@ -1,1 +1,156 @@
-
+AWSTemplateFormatVersion: 2010-09-09
+Description: This Template create health event, event bus and SNS
+Parameters:
+  MasterRegion:
+    Type: String
+    Description: Enter the AWS home region for event bus(for example, us-east-1)
+    AllowedPattern: .+
+    Default: eu-west-1
+  OrgId:
+    Type: String
+    Description: Enter the Organisation Id
+    Default: o-4s4x2skfku
+  AuditAccountId:
+    Type: String
+    Description: Enter the Audit Account Id where event bus will create
+    Default: '559232017327'
+  Emailalerts:
+    Type: String
+    AllowedPattern: ".+@.+"
+    Default: 'AWS-Cloudops@bankfab.com'
+    Description: "Triggered to health alert to this email address. Verification required."
+Conditions:    
+  CreateEventBusOriginRegion: !And
+    - !Equals
+      - !Ref AuditAccountId
+      - !Ref AWS::AccountId
+    - !Equals 
+      - !Ref MasterRegion
+      - !Ref AWS::Region 
+  OriginRegion: !Equals 
+    - !Ref MasterRegion
+    - !Ref AWS::Region  
+Resources:
+  rHealthEventBus:
+    Condition: CreateEventBusOriginRegion
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: Healthevent-findings-eventbus
+  rHealthEventBusPolicy:
+    Condition: CreateEventBusOriginRegion
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+        Action: "events:PutEvents"
+        Principal: "*"
+        StatementId: "AllowallaccountPutEventsToauditAccount"
+        EventBusName: !Ref rHealthEventBus
+        Condition:
+            Type: "StringEquals"
+            Key: "aws:PrincipalOrgID"
+            Value: !Ref OrgId
+  rHealtheventRule:
+    Condition: CreateEventBusOriginRegion
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: Health Event Rule
+      EventBusName: !Ref rHealthEventBus
+      EventPattern:
+        source:
+          - 'aws.health'
+        detail-type:
+          - 'AWS Health Event'
+        detail:
+          eventTypeCategory:
+            - 'issue'
+            - 'scheduledChange'
+      State: ENABLED
+      Targets:
+        - Arn:
+            Ref: "SnsTopicEventRule"
+          Id: "target-sns"
+  SnsTopicEventRule:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      Subscription:
+        - Endpoint: !Ref Emailalerts
+          Protocol: "email"
+      TopicName: Health-event-Notification
+      DisplayName: Health-event-Notification
+  SnsTopicPolicyEventRule:
+    Condition: CreateEventBusOriginRegion
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Sid: "__default_statement_ID"
+            Effect: "Allow"
+            Principal:
+              AWS: "*"
+            Action:
+              - "SNS:GetTopicAttributes"
+              - "SNS:SetTopicAttributes"
+              - "SNS:AddPermission"
+              - "SNS:RemovePermission"
+              - "SNS:DeleteTopic"
+              - "SNS:Subscribe"
+              - "SNS:ListSubscriptionsByTopic"
+              - "SNS:Publish"
+              - "SNS:Receive"
+            Resource:
+              Ref: "SnsTopicEventRule"
+            Condition:
+              StringEquals:
+                AWS:SourceOwner:
+                  Ref: "AWS::AccountId"
+          - Sid: "TrustCWEToPublishEventsToMyTopic"
+            Effect: "Allow"
+            Principal:
+              Service: "events.amazonaws.com"
+            Action: "sns:Publish"
+            Resource:
+              Ref: "SnsTopicEventRule"
+      Topics:
+        - Ref: "SnsTopicEventRule"
+  rHealthSpokeRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: Health Event Rule
+      Description: Health Event Rule
+      EventPattern:
+        source:
+          - 'aws.health'
+        detail-type:
+          - 'AWS Health Event'
+        detail:
+          eventTypeCategory:
+            - 'issue'
+            - 'scheduledChange'
+      State: ENABLED
+      Targets:
+        - Arn: !Sub arn:aws:events:${MasterRegion}:${AuditAccountId}:event-bus/Healthevent-findings-eventbus
+          Id: healthfindingsruletoeventbus
+          RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/Health-eventbus-role
+  HealtheventRuleDeliveryRole:
+    Condition: OriginRegion
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: Health-eventbus-role
+      Description: Health-eventbus-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: HealthEventBusDeliveryRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'events:PutEvents'
+                Resource: !Sub arn:aws:events:${MasterRegion}:${AuditAccountId}:event-bus/Healthevent-findings-eventbus
