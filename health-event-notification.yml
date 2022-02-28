@@ -52,7 +52,7 @@ Resources:
     Condition: CreateEventBusOriginRegion
     Type: 'AWS::Events::Rule'
     Properties:
-      Description: Health Event Rule
+      Description: Health-Event-Rule
       EventBusName: !Ref rHealthEventBus
       EventPattern:
         source:
@@ -69,6 +69,7 @@ Resources:
             Ref: "SnsTopicEventRule"
           Id: "target-sns"
   SnsTopicEventRule:
+    Condition: CreateEventBusOriginRegion
     Type: "AWS::SNS::Topic"
     Properties:
       Subscription:
@@ -114,7 +115,7 @@ Resources:
   rHealthSpokeRule:
     Type: 'AWS::Events::Rule'
     Properties:
-      Name: Health Event Rule
+      Name: Health-Event-Rule
       Description: Health Event Rule
       EventPattern:
         source:
