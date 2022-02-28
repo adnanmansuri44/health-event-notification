@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'This Cloudformation will create Cloudformation admin role and Execution role in Master account'
+Resources:
+  IAMexecutionrole:
+    DependsOn:
+    - IAMAdminrole
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWSCloudFormationStackSetExecutionRole123
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: 
+                AWS:
+                - !Join ['', ['arn:aws:iam::', !Ref 'AWS::AccountId',':role/AWSCloudFormationStackSetAdministrationRole123']]
+            Action:
+            - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess  
+  IAMAdminrole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWSCloudFormationStackSetAdministrationRole123
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: 
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole    
+      Policies: 
+        - 
+          PolicyName: 'sts-assume-for-stack-admin'
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              - 
+                Effect: "Allow"
+                Action:
+                  - sts:AssumeRole
+                Resource: 
+                    - "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole123"
