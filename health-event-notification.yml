@@ -6,6 +6,10 @@ Parameters:
     Description: Enter the AWS home region for event bus(for example, us-east-1)
     AllowedPattern: .+
     Default: eu-west-1
+  Kmskeyalias:
+    Type: String
+    Description: Enter the KMS key aliase for SNS topic example(for example, alias/SNS-Encryption)
+    Default: alias/SNS-Encryption    
   OrgId:
     Type: String
     Description: Enter the Organisation Id
@@ -78,7 +82,7 @@ Resources:
           Protocol: "email"
       TopicName: Health-event-Notification
       DisplayName: Health-event-Notification
-      KmsMasterKeyId: alias/aws/sns
+      KmsMasterKeyId: !Ref Kmskeyalias
   SnsTopicPolicyEventRule:
     Condition: CreateEventBusOriginRegion
     Type: "AWS::SNS::TopicPolicy"
